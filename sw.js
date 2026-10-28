@@ -1,6 +1,6 @@
 // Guarda la app en el móvil para que abra al instante y se actualice en segundo plano.
 // Al cambiar cualquier archivo de la app, sube VERSION para forzar la actualización.
-const VERSION = 'hontza-ebf5e85c';
+const VERSION = 'hontza-5fbd9794';
 const ARCHIVOS = [
   './', './index.html', './config.js', './manifest.webmanifest',
   './icons/logo.png', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png',
