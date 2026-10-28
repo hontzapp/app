@@ -138,6 +138,10 @@
   .btn-peq { border: 1px solid var(--line); background: var(--card); color: var(--err); border-radius: 10px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
   .btn-peq.confirmar { background: var(--err); border-color: var(--err); color: #fff; }
 
+  .zurea { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+    font-weight: 700; background: var(--accent); color: var(--accent-ink); vertical-align: 1px; }
+  .libres { padding-top: 8px; font-size: 13px; color: var(--muted); }
+
   /* Kontuak */
   .compra { display: grid; grid-template-columns: 1fr 96px 36px; gap: 8px; margin-bottom: 8px; }
   .compra input, .importe-input { padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); min-width: 0; }
@@ -200,6 +204,10 @@
       <button data-acc="ir-reservas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
         <div><b>Mahaia erreserbatu</b><span>Bazkari edo afarirako mahaia hartu</span></div>
+      </button>
+      <button data-acc="ir-todas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+        <div><b>Erreserba guztiak</b><span>Elkartean egindako hurrengo erreserbak</span></div>
       </button>
       <button data-acc="ir-cuentas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h2M14 11h2M8 15h2M14 15h2M8 19h2M14 19h2"/></svg>
@@ -314,13 +322,27 @@
       <textarea id="e-comentario" placeholder="Aukerakoa: ospakizuna, sukaldea behar da…"></textarea>
     </div>
     <div class="tarjeta">
-      <h2>Nire erreserbak</h2>
+      <div class="fila" style="margin-bottom:10px">
+        <h2 style="margin:0">Nire erreserbak</h2>
+        <button class="enlace" data-acc="todas-desde-reservas">Guztiak ikusi ›</button>
+      </div>
       <div id="e-mias"><p class="vacio">Kargatzen…</p></div>
     </div>
   </main>
   <div class="pie">
     <button class="btn ancho" id="btn-reservar" data-acc="reservar" disabled>Aukeratu mahaia</button>
   </div>
+</section>
+
+<!-- Erreserba guztiak -->
+<section id="v-todas" class="vista">
+  <div class="barra">
+    <div class="barra-fila">
+      <button class="enlace" data-acc="todas-atras">‹ Atzera</button>
+      <h1>Erreserba guztiak</h1>
+    </div>
+  </div>
+  <main id="t-lista" style="padding-bottom:32px"></main>
 </section>
 
 <!-- Kontuak egin -->
@@ -663,6 +685,55 @@
     cargarDia();
   }
 
+  // ─── Erreserba guztiak ────────────────────────────────────────────────────
+  let volverTodas = 'v-inicio';
+
+  async function abrirTodas(desde) {
+    volverTodas = desde;
+    $('#t-lista').innerHTML = '<p class="vacio">Kargatzen…</p>';
+    mostrar('v-todas');
+    try {
+      pintarTodas(await api('getReservasProximas', st.socio.num, st.socio.pin));
+    } catch (e) {
+      $('#t-lista').innerHTML = '<p class="vacio">Ezin izan dira erreserbak kargatu.</p>';
+      errorSesion(e);
+    }
+  }
+
+  function etiquetaDia(fecha) {
+    const manana = new Date(); manana.setDate(manana.getDate() + 1);
+    manana.setMinutes(manana.getMinutes() - manana.getTimezoneOffset());
+    const prefijo = fecha === hoy() ? 'Gaur · ' : fecha === manana.toISOString().slice(0, 10) ? 'Bihar · ' : '';
+    return prefijo + fechaLarga(fecha);
+  }
+
+  function pintarTodas(lista) {
+    if (!lista.length) {
+      $('#t-lista').innerHTML = '<p class="vacio">Ez dago erreserbarik hurrengo egunetarako.</p>';
+      return;
+    }
+    // Egunka eta txandaka taldekatu (zerbitzariak ordenatuta bidaltzen ditu).
+    const grupos = [];
+    lista.forEach(r => {
+      let g = grupos[grupos.length - 1];
+      if (!g || g.fecha !== r.fecha || g.turno !== r.turno) grupos.push(g = { fecha: r.fecha, turno: r.turno, reservas: [] });
+      g.reservas.push(r);
+    });
+    let html = '', dia = null;
+    grupos.forEach(g => {
+      if (g.fecha !== dia) { dia = g.fecha; html += `<div class="grupo">${esc(etiquetaDia(g.fecha))}</div>`; }
+      const ocupadas = g.reservas.flatMap(r => r.mesas);
+      const libres = st.datos.mesas.filter(m => ocupadas.indexOf(m) < 0);
+      html += `<div class="tarjeta" style="margin-top:6px"><h2>${esc(g.turno)}</h2>` +
+        g.reservas.map(r => `<div class="reserva"><div>
+          <b>${esc(r.mesas.join(', '))}</b>${r.socioNum === st.socio.num ? '<span class="zurea">Zurea</span>' : ''}<br>
+          <span class="sub">${esc(r.socio)} · ${r.personas} pertsona</span>
+          ${r.comentario ? `<br><span class="sub">${esc(r.comentario)}</span>` : ''}</div></div>`).join('') +
+        `<div class="libres">${libres.length ? 'Libre: ' + esc(libres.join(', ')) : 'Mahai guztiak hartuta'}</div></div>`;
+    });
+    $('#t-lista').innerHTML = html;
+  }
+
   // ─── Kontuak egin (ez da inon gordetzen) ──────────────────────────────────
   const cu = { nota: 0, compras: [], comensales: 1, volver: 'v-inicio' };
 
@@ -727,6 +798,9 @@
       case 'ir-nota': pintarCatalogo(); mostrar('v-catalogo'); break;
       case 'ir-reservas': abrirReservas(); break;
       case 'ir-cuentas': abrirCuentas('v-inicio'); break;
+      case 'ir-todas': abrirTodas('v-inicio'); break;
+      case 'todas-desde-reservas': abrirTodas('v-reservas'); break;
+      case 'todas-atras': if (volverTodas === 'v-reservas') abrirReservas(); else mostrar(volverTodas); break;
       case 'instalar':
         if (avisoInstalar) { avisoInstalar.prompt(); avisoInstalar = null; $('#i-instalar').hidden = true; }
         break;
@@ -888,7 +962,10 @@
     ].map(([id, categoria, nombre, precio]) => ({ id, categoria, nombre, precio }));
     const socios = [{ num: '1', nombre: 'Proba bazkidea' }, { num: '7', nombre: 'Miren Etxeberria' }];
     const mesas = ['Mahaia 1', 'Mahaia 2', 'Mahaia 3', 'Mahaia 4', 'Mahaia 5', 'Mahai txikia'];
-    const reservas = [{ id: '1', fecha: hoy(), turno: 'Afaria', mesas: ['Mahaia 2', 'Mahaia 3'], socio: 'Jon Arana', socioNum: '3', personas: 14 }];
+    const reservas = [
+      { id: '1', fecha: hoy(), turno: 'Afaria', mesas: ['Mahaia 2', 'Mahaia 3'], socio: 'Jon Arana', socioNum: '3', personas: 14, comentario: 'Urtebetetzea' },
+      { id: '2', fecha: hoy(), turno: 'Bazkaria', mesas: ['Mahai txikia'], socio: 'Ane Zubia', socioNum: '5', personas: 4, comentario: '' },
+    ];
     let numero = 41, idRes = 1;
     const espera = v => new Promise(r => setTimeout(() => r(v), 400));
     const fallo = m => new Promise((_, ko) => setTimeout(() => ko(new Error(m)), 400));
@@ -907,11 +984,13 @@
       },
       getReservasDia: (num, pin, fecha) => espera(reservas.filter(r => r.fecha === fecha)),
       getMisReservas: num => espera(reservas.filter(r => r.socioNum === num)),
+      getReservasProximas: () => espera(reservas.slice().sort((a, b) => a.fecha.localeCompare(b.fecha) ||
+        (a.turno === b.turno ? 0 : a.turno === 'Bazkaria' ? -1 : 1))),
       reservar: r => {
         const ocup = reservas.filter(x => x.fecha === r.fecha && x.turno === r.turno).flatMap(x => x.mesas);
         const choque = r.mesas.filter(m => ocup.includes(m));
         if (choque.length) return fallo('Hartuta dago jada: ' + choque.join(', ') + '.');
-        const nueva = { id: String(++idRes), fecha: r.fecha, turno: r.turno, mesas: r.mesas, personas: r.personas,
+        const nueva = { id: String(++idRes), fecha: r.fecha, turno: r.turno, mesas: r.mesas, personas: r.personas, comentario: r.comentario,
           socio: socios.find(s => s.num === r.socio).nombre, socioNum: r.socio };
         reservas.push(nueva);
         return espera(Object.assign({ emailOk: true }, nueva));
